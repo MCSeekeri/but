@@ -1,0 +1,37 @@
+name: Releases
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        platform: [ubuntu-22.04]
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Build App
+        run: |
+          cargo build -r
+          upx --best --ultra-brute ./target/release/but
+
+      - name: release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./target/release/but
