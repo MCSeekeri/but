@@ -92,11 +92,8 @@ fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     Err("找不到配置文件".into())
 }
 
-fn start_listen(verbose: bool) {
-    let config = load_config().unwrap_or_else(|err| {
-        eprintln!("加载配置失败: {}", err);
-        std::process::exit(1);
-    });
+fn start_listen(verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let config = load_config()?;
 
     let mut last_backup_time = SystemTime::now();
     let mut last_meta = HashMap::new();
@@ -105,7 +102,7 @@ fn start_listen(verbose: bool) {
     loop {
         std::thread::sleep(Duration::from_secs(1));
         let now = SystemTime::now();
-        if now.duration_since(last_backup_time).unwrap().as_secs() >= config.settings.interval {
+        if now.duration_since(last_backup_time)?.as_secs() >= config.settings.interval {
             for (name, item) in config.backup.iter() {
                 let mut changed_files = Vec::new();
                 let mut current_meta = HashMap::new();
@@ -116,15 +113,15 @@ fn start_listen(verbose: bool) {
                 }
 
                 for entry in WalkDir::new(&item.from) {
-                    let entry: walkdir::Result<walkdir::DirEntry> = entry;
-                    let entry = entry.unwrap();
+                    let entry = entry?;
                     let path = entry.path();
                     if path.is_file() {
-                        let meta = fs::metadata(path).unwrap();
-                        let last_modified = meta.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                        let meta = fs::metadata(path)?;
+                        let last_modified = meta.modified()?.duration_since(UNIX_EPOCH)?.as_secs();
                         current_meta.insert(path.to_string_lossy().to_string(), last_modified);
-                
-                        if let Some(last_modified_old) = last_meta.get(name).and_then(|meta: &HashMap<String, u64>| meta.get(&path.to_string_lossy().to_string())) {    if *last_modified_old != last_modified {
+
+                        if let Some(last_modified_old) = last_meta.get(name).and_then(|meta: &HashMap<String, u64>| meta.get(&path.to_string_lossy().to_string())) {
+                            if *last_modified_old != last_modified {
                                 changed_files.push(path.to_string_lossy().to_string());
                             }
                         } else {
@@ -150,7 +147,7 @@ fn start_listen(verbose: bool) {
                     let backup_name = format!(
                         "{}-{}",
                         name.replace("%name%", name),
-                        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+                        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
                     );
 
                     let dest_path = format!(
@@ -268,14 +265,14 @@ struct Args {
     init: bool,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     if args.init {
-        if let Err(err) = init_config() {
-            eprintln!("初始化配置失败: {}", err);
-        }
+        init_config()?;
     } else {
-        start_listen(args.verbose);
+        start_listen(args.verbose)?;
     }
+
+    Ok(())
 }
